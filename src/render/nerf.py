@@ -115,6 +115,7 @@ class NeRFRenderer(torch.nn.Module):
             return 1 / (1 / near * (1 - z_steps) + 1 / far * z_steps)  # (B, Kf)
 
         # Use linear sampling in depth space
+        get_gpu_memory(1)
         return near * (1 - z_steps) + far * z_steps  # (B, Kc)
 
     def sample_fine(self, rays, weights):
@@ -145,6 +146,7 @@ class NeRFRenderer(torch.nn.Module):
             z_samp = near * (1 - z_steps) + far * z_steps  # (B, Kf)
         else:  # Use linear sampling in disparity space
             z_samp = 1 / (1 / near * (1 - z_steps) + 1 / far * z_steps)  # (B, Kf)
+        get_gpu_memory(2)
         return z_samp
 
     def sample_fine_depth(self, rays, depth):
@@ -158,6 +160,7 @@ class NeRFRenderer(torch.nn.Module):
         z_samp += torch.randn_like(z_samp) * self.depth_std
         # Clamp does not support tensor bounds
         z_samp = torch.max(torch.min(z_samp, rays[:, -1:]), rays[:, -2:-1])
+        get_gpu_memory(3)
         return z_samp
 
     def composite(self, model, rays, z_samp, coarse=True, sb=0):
@@ -242,6 +245,7 @@ class NeRFRenderer(torch.nn.Module):
                 # White background
                 pix_alpha = weights.sum(dim=1)  # (B), pixel alpha
                 rgb_final = rgb_final + 1 - pix_alpha.unsqueeze(-1)  # (B, 3)
+            get_gpu_memory(4)
             return (
                 weights,
                 rgb_final,
@@ -299,7 +303,7 @@ class NeRFRenderer(torch.nn.Module):
                 outputs.fine = self._format_outputs(
                     fine_composite, superbatch_size, want_weights=want_weights,
                 )
-
+            get_gpu_memory(5)
             return outputs
 
     def _format_outputs(
@@ -313,6 +317,7 @@ class NeRFRenderer(torch.nn.Module):
         ret_dict = DotMap(rgb=rgb, depth=depth)
         if want_weights:
             ret_dict.weights = weights
+        get_gpu_memory(6)
         return ret_dict
 
     def sched_step(self, steps=1):
@@ -336,6 +341,7 @@ class NeRFRenderer(torch.nn.Module):
                 self.n_fine,
             )
             self.last_sched += 1
+        get_gpu_memory(7)
 
     @classmethod
     def from_conf(cls, conf, white_bkgd=False, lindisp=False, eval_batch_size=20000):
@@ -369,3 +375,10 @@ class NeRFRenderer(torch.nn.Module):
             print("Using multi-GPU", gpus)
             wrapped = torch.nn.DataParallel(wrapped, gpus, dim=1)
         return wrapped
+
+def get_gpu_memory(index):
+    t = torch.cuda.get_device_properties(0).total_memory
+    r = torch.cuda.memory_reserved(0) 
+    a = torch.cuda.memory_allocated(0)
+    f = r-a  # free inside reserved
+    print (str(index) + ' ' + str(t/(1024**3)) + ", " + str(r/(1024**3)) + ", " + str(a/(1024**3)) + ", " + str(f/(1024**3)))
