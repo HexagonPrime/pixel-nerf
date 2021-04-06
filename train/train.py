@@ -110,9 +110,11 @@ class PixelNeRFTrainer(trainlib.Trainer):
 
     def post_batch(self, epoch, batch):
         renderer.sched_step(args.batch_size)
+        get_gpu_memory(8)
 
     def extra_save_state(self):
         torch.save(renderer.state_dict(), self.renderer_state_path)
+        get_gpu_memory(9)
 
     def calc_losses(self, data, is_train=True, global_step=0):
         if "images" not in data:
@@ -177,10 +179,11 @@ class PixelNeRFTrainer(trainlib.Trainer):
 
             all_rgb_gt.append(rgb_gt)
             all_rays.append(rays)
-
+        get_gpu_memory(10)
         all_rgb_gt = torch.stack(all_rgb_gt)  # (SB, ray_batch_size, 3)
         all_rays = torch.stack(all_rays)  # (SB, ray_batch_size, 8)
 
+        get_gpu_memory(11)
         image_ord = image_ord.to(device)
         src_images = util.batched_index_select_nd(
             all_images, image_ord
@@ -195,8 +198,9 @@ class PixelNeRFTrainer(trainlib.Trainer):
             all_focals.to(device=device),
             c=all_c.to(device=device) if all_c is not None else None,
         )
-
+        get_gpu_memory(12)
         render_dict = DotMap(render_par(all_rays, want_weights=True,))
+        get_gpu_memory(13)
         coarse = render_dict.coarse
         fine = render_dict.fine
         using_fine = len(fine) > 0
@@ -339,6 +343,12 @@ class PixelNeRFTrainer(trainlib.Trainer):
         renderer.train()
         return vis, vals
 
+def get_gpu_memory(index):
+    t = torch.cuda.get_device_properties(0).total_memory
+    r = torch.cuda.memory_reserved(0) 
+    a = torch.cuda.memory_allocated(0)
+    f = r-a  # free inside reserved
+    print (str(index) + ' ' + str(t/(1024**3)) + ", " + str(r/(1024**3)) + ", " + str(a/(1024**3)) + ", " + str(f/(1024**3)))
 
 trainer = PixelNeRFTrainer()
 trainer.start()
