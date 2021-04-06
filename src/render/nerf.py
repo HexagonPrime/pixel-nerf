@@ -66,7 +66,7 @@ class NeRFRenderer(torch.nn.Module):
         n_fine_depth=0,
         noise_std=0.0,
         depth_std=0.01,
-        eval_batch_size=20000,
+        eval_batch_size=100000,
         white_bkgd=False,
         lindisp=False,
         sched=None,  # ray sampling schedule for coarse and fine rays
@@ -344,7 +344,7 @@ class NeRFRenderer(torch.nn.Module):
         get_gpu_memory(7)
 
     @classmethod
-    def from_conf(cls, conf, white_bkgd=False, lindisp=False, eval_batch_size=20000):
+    def from_conf(cls, conf, white_bkgd=False, lindisp=False, eval_batch_size=100000):
         return cls(
             conf.get_int("n_coarse", 128),
             conf.get_int("n_fine", 0),
