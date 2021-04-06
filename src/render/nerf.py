@@ -25,10 +25,11 @@ class _RenderWrapper(torch.nn.Module):
                 torch.zeros(0, 3, device=rays.device),
                 torch.zeros(0, device=rays.device),
             )
-
+        get_gpu_memory(14)
         outputs = self.renderer(
             self.net, rays, want_weights=want_weights and not self.simple_output
         )
+        get_gpu_memory(15)
         if self.simple_output:
             if self.renderer.using_fine:
                 rgb = outputs.fine.rgb
@@ -206,17 +207,22 @@ class NeRFRenderer(torch.nn.Module):
                 dim1 = K
                 viewdirs = rays[:, None, 3:6].expand(-1, dim1, -1)  # (B, K, 3)
                 if sb > 0:
+                    get_gpu_memory(19)
                     viewdirs = viewdirs.reshape(sb, -1, 3)  # (SB, B'*K, 3)
                 else:
+                    get_gpu_memory(18)
                     viewdirs = viewdirs.reshape(-1, 3)  # (B*K, 3)
                 split_viewdirs = torch.split(
                     viewdirs, eval_batch_size, dim=eval_batch_dim
                 )
                 for pnts, dirs in zip(split_points, split_viewdirs):
+                    get_gpu_memory(16)
                     val_all.append(model(pnts, coarse=coarse, viewdirs=dirs))
             else:
                 for pnts in split_points:
+                    get_gpu_memory(17)
                     val_all.append(model(pnts, coarse=coarse))
+            get_gpu_memory(20)
             points = None
             viewdirs = None
             # (B*K, 4) OR (SB, B'*K, 4)
