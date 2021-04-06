@@ -218,6 +218,7 @@ class NeRFRenderer(torch.nn.Module):
                 for pnts, dirs in zip(split_points, split_viewdirs):
                     get_gpu_memory(16)
                     val_all.append(model(pnts, coarse=coarse, viewdirs=dirs))
+                    get_gpu_memory(21)
             else:
                 for pnts in split_points:
                     get_gpu_memory(17)
