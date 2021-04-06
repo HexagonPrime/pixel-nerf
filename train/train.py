@@ -352,3 +352,6 @@ def get_gpu_memory(index):
 
 trainer = PixelNeRFTrainer()
 trainer.start()
+stats = torch.cuda.memory_stats()
+peak_bytes_requirement = stats["allocated_bytes.all.peak"]
+print(f"Peak memory requirement: {peak_bytes_requirement / 1024 ** 3:.2f} GB")
