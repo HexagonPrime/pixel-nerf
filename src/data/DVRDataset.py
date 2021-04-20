@@ -39,6 +39,7 @@ class DVRDataset(torch.utils.data.Dataset):
         """
         super().__init__()
         self.base_path = path
+        print(self.base_path)
         assert os.path.exists(self.base_path)
 
         cats = [x for x in glob.glob(os.path.join(path, "*")) if os.path.isdir(x)]
