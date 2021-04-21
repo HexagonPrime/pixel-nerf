@@ -6,5 +6,4 @@
 
 conda activate pixelnerf
 #module load libs/cuda
-
 python train/train.py -n dtu_exp -c conf/exp/dtu.conf -D /scratch-second/shecai/rs_dtu_4 -V 3 --gpu_id=0
