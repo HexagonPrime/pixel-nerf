@@ -19,7 +19,7 @@ import torch.nn.functional as F
 import torch
 from dotmap import DotMap
 
-
+print(torch.cuda.get_device_name(0))
 def extra_args(parser):
     parser.add_argument(
         "--batch_size", "-B", type=int, default=4, help="Object batch size ('SB')"

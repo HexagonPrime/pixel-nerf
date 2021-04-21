@@ -2,7 +2,7 @@
 #SBATCH --output=log/%j.out
 #SBATCH --mem=50G
 #SBATCH --gres=gpu:1
-#SBATCH --constrain='titan_xp'
+#SBATCH --constrain='titan_xp|geforce_rtx_2080_ti|geforce gtx_1080_ti|titan_xp_collectors_edition'
 
 source /scratch_net/biwidl306/shecai/conda/etc/profile.d/conda.sh
 conda activate pixelnerf
