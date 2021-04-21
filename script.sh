@@ -7,4 +7,4 @@
 source /scratch_net/biwidl306/shecai/conda/etc/profile.d/conda.sh
 conda activate pixelnerf
 #module load libs/cuda
-python train/train.py -n dtu_exp -c conf/exp/dtu.conf -D /scratch_net/biwidl306/shecai/rs_dtu_4 -V 3 --gpu_id='0 1' -R 20000
+python train/train.py -n dtu_exp -c conf/exp/dtu.conf -D /scratch_net/biwidl306/shecai/rs_dtu_4 -V 3 --gpu_id='0 1 2 3 4 5' -R 20000 -B 4
