@@ -1,5 +1,5 @@
 #!/bin/bash -l
-#SBATCH --output=log/%j.out
+#SBATCH --output=log/dtu.out
 #SBATCH --mem=50G
 #SBATCH --gres=gpu:1
 #SBATCH --constrain='geforce_rtx_2080_ti|geforce_gtx_1080_ti|titan_xp|geforce_gtx_titan_x'
