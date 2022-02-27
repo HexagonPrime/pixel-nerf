@@ -4,7 +4,6 @@ import torch
 import math
 import torch.nn.functional as F
 
-from siren import pixel_encoder
 
 class Sine(nn.Module):
     """Sine Activation Function."""
@@ -72,52 +71,6 @@ class CustomMappingNetwork(nn.Module):
         phase_shifts = frequencies_offsets[..., frequencies_offsets.shape[-1]//2:]
 
         return frequencies, phase_shifts
-
-# class CustomMappingNetwork(nn.Module):
-#     def __init__(self, map_input_dim, map_hidden_dim, map_output_dim, ori_pigan):
-#         super().__init__()
-
-#         if not ori_pigan:
-#             self.network = nn.Sequential(nn.Linear(map_input_dim, map_hidden_dim),
-#                                      nn.LeakyReLU(0.2, inplace=True),
-
-#                                     nn.Linear(map_hidden_dim, map_hidden_dim),
-#                                     nn.LeakyReLU(0.2, inplace=True),
-
-#                                     nn.Linear(map_hidden_dim, map_hidden_dim),
-#                                     nn.LeakyReLU(0.2, inplace=True),
-
-#                                     nn.Linear(map_hidden_dim, map_output_dim))
-#         else:
-#             self.network = nn.Sequential(nn.Linear(256, map_hidden_dim),
-#                                      nn.LeakyReLU(0.2, inplace=True),
-
-#                                     nn.Linear(map_hidden_dim, map_hidden_dim),
-#                                     nn.LeakyReLU(0.2, inplace=True),
-
-#                                     nn.Linear(map_hidden_dim, map_hidden_dim),
-#                                     nn.LeakyReLU(0.2, inplace=True),
-
-#                                     nn.Linear(map_hidden_dim, map_output_dim))
-
-#         self.network.apply(kaiming_leaky_init)
-#         with torch.no_grad():
-#             self.network[-1].weight *= 0.25
-
-#     def forward(self, latent):
-#         frequencies_offsets = self.network(latent)
-#         frequencies = frequencies_offsets[..., :frequencies_offsets.shape[-1]//2]
-#         phase_shifts = frequencies_offsets[..., frequencies_offsets.shape[-1]//2:]
-
-#         return frequencies, phase_shifts, frequencies_offsets
-
-    # def forward_ave(self, latent):
-    #     frequencies_offsets = self.network(latent)
-    #     frequencies = frequencies_offsets[..., :frequencies_offsets.shape[-1]//2]
-    #     phase_shifts = frequencies_offsets[..., frequencies_offsets.shape[-1]//2:]
-
-    #     return frequencies, phase_shifts
-
 
 def frequency_init(freq):
     def init(m):

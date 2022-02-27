@@ -356,8 +356,6 @@ class CCSEncoderDiscriminator(nn.Module):
         x = self.final_layer(x).reshape(x.shape[0], -1)
 
         prediction = x[..., 0:1]
-        # latent = x[..., 1:257]
-        # position = x[..., 257:259]
         position = x[..., 1:3]
 
         return prediction, position
@@ -388,17 +386,12 @@ class CCSEncoder(nn.Module):
             AdapterBlock(400, sn=sn)
         ])
         self.final_layer = mk_conv2d(400, self.z_dim + 2, 2, sn=sn)
-        # self.final_layer = mk_conv2d(400, 1 + 2, 2, sn=sn)
         self.img_size_to_layer = {2:7, 4:6, 8:5, 16:4, 32:3, 64:2, 128:1, 256:0}
         self.tanh = nn.Tanh()
 
-    # def forward(self, input, alpha, options=None, **kwargs):
     def forward(self, input, alpha):
         start = self.img_size_to_layer[input.shape[-1]]
         x = self.fromRGB[start](input)
-
-        # if kwargs.get('instance_noise', 0) > 0:
-        #     x = x + torch.randn_like(x) * kwargs['instance_noise']
 
         for i, layer in enumerate(self.layers[start:]):
             if i == 1 and alpha < 1:
@@ -414,6 +407,8 @@ class CCSEncoder(nn.Module):
         position = x[..., self.z_dim:self.z_dim+2]
 
         latent = self.tanh(latent)
+        # latent = (latent - torch.min(latent)) / (torch.max(latent) - torch.min(latent))
+        # latent = 2 * latent - 1
         return latent, position
 
 class CCSVAE(nn.Module):
@@ -442,7 +437,6 @@ class CCSVAE(nn.Module):
             AdapterBlock(400, sn=sn)
         ])
         self.final_layer = mk_conv2d(400, self.z_dim*2 + 2, 2, sn=sn)
-        # self.final_layer = mk_conv2d(400, 1 + 2, 2, sn=sn)
         self.img_size_to_layer = {2:7, 4:6, 8:5, 16:4, 32:3, 64:2, 128:1, 256:0}
 
     def reparameterize(self, mu, log_var):
@@ -459,9 +453,6 @@ class CCSVAE(nn.Module):
     def forward(self, input, alpha):
         start = self.img_size_to_layer[input.shape[-1]]
         x = self.fromRGB[start](input)
-
-        # if kwargs.get('instance_noise', 0) > 0:
-        #     x = x + torch.randn_like(x) * kwargs['instance_noise']
 
         for i, layer in enumerate(self.layers[start:]):
             if i == 1 and alpha < 1:
@@ -480,3 +471,65 @@ class CCSVAE(nn.Module):
         kld_loss = torch.mean(-0.5 * torch.sum(1 + log_var - mu ** 2 - log_var.exp(), dim = 1), dim = 0)
 
         return latent, kld_loss, position
+
+"""
+Implements image encoders
+"""
+def kaiming_leaky_init(m):
+    classname = m.__class__.__name__
+    if classname.find('Linear') != -1:
+        torch.nn.init.kaiming_normal_(m.weight, a=0.2, mode='fan_in', nonlinearity='leaky_relu')
+
+import torchvision
+
+class ImageEncoder(nn.Module):
+    """
+    Global image encoder
+    """
+
+    def __init__(self, backbone="resnet34", pretrained=True, z_dim=512):
+        """
+        :param backbone Backbone network. Assumes it is resnet*
+        e.g. resnet34 | resnet50
+        :param pretrained Whether to use model pretrained on ImageNet
+        """
+        super().__init__()
+        self.model = getattr(torchvision.models, backbone)(pretrained=pretrained)
+        self.model.fc = nn.Sequential()
+        # self.register_buffer("latent", torch.empty(1, 1), persistent=False)
+        # self.latent (B, L)
+        self.z_dim = z_dim
+        self.fc = nn.Linear(512, z_dim+2)
+        self.tanh = nn.Tanh()
+
+    def index(self, uv, cam_z=None, image_size=(), z_bounds=()):
+        """
+        Params ignored (compatibility)
+        :param uv (B, N, 2) only used for shape
+        :return latent vector (B, L, N)
+        """
+        return self.latent.unsqueeze(-1).expand(-1, -1, uv.shape[1])
+
+    def forward(self, x, alpha):
+        """
+        For extracting ResNet's features.
+        :param x image (B, C, H, W)
+        :return latent (B, z_dim)
+        """
+        x = self.model.conv1(x)
+        x = self.model.bn1(x)
+        x = self.model.relu(x)
+
+        x = self.model.maxpool(x)
+        x = self.model.layer1(x)
+        x = self.model.layer2(x)
+        x = self.model.layer3(x)
+        x = self.model.layer4(x)
+
+        x = self.model.avgpool(x)
+        x = torch.flatten(x, 1)
+
+        x = self.fc(x)
+        # x = self.tanh(x)
+
+        return self.tanh(x[:, :self.z_dim]), x[:, self.z_dim:self.z_dim+2]

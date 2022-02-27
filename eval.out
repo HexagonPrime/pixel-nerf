@@ -1,0 +1,7 @@
+EXPERIMENT NAME: srn_chairs
+* Config file: conf/exp/srn.conf
+* Dataset format: srn
+* Dataset location: /scratch_net/biwidl212/shecai/datasets/srn_chairs/chairs
+Loading SRN dataset /scratch_net/biwidl212/shecai/datasets/srn_chairs/chairs_test name: chairs
+Writing images to /home/shecai/Desktop/pixel-nerf/eval_output
+slurmstepd: error: *** JOB 529401 ON bmicgpu02 CANCELLED AT 2022-02-18T20:53:13 ***

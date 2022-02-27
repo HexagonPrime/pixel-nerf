@@ -4,13 +4,15 @@ import random
 import torch.nn as nn
 import torch
 import time
-from .positional_encoding import Embedding
 
 # from torchvision.transforms import InterpolationMode
 
 from torch.cuda.amp import autocast
 
 from .volumetric_rendering_con import *
+
+# from siren import pixel_encoder
+from discriminators.sgdiscriminators_con import CCSEncoder
 
 import torchvision.transforms as transforms
 
@@ -21,7 +23,6 @@ class ImplicitGenerator3d(nn.Module):
         self.siren = siren(output_dim=4, z_dim=self.z_dim, input_dim=3, device=None)
         self.epoch = 0
         self.step = 0
-        # self.positional_embedding = Embedding(2, 10)      # N_feq = 4 is used in NeRF for viewpoint, 10 for xyz coordinate
 
     def set_device(self, device):
         self.device = device
@@ -45,8 +46,6 @@ class ImplicitGenerator3d(nn.Module):
         # Generate initial camera rays and sample points.
         with torch.no_grad():
             points_cam, z_vals, rays_d_cam = get_initial_rays_trig(batch_size, num_steps, resolution=(img_size, img_size), device=self.device, fov=fov, ray_start=ray_start, ray_end=ray_end) # batch_size, pixels, num_steps, 1
-            # print('points_cam')
-            # print(points_cam.shape)    # [3, 4096, 12, 3]
             if mode == '':
                 transformed_points, z_vals, transformed_ray_directions, transformed_ray_origins, pitch, yaw = transform_sampled_points(points_cam, z_vals, rays_d_cam,
                                                                                                                                        h_stddev=h_stddev, v_stddev=v_stddev,
@@ -59,8 +58,6 @@ class ImplicitGenerator3d(nn.Module):
                                                                                                                                        device=self.device, mode='reconstruction')
             else:
                 raise RuntimeError('forward mode wrongly specified')
-            # print('transformed_points')
-            # print(transformed_points.shape)    # [3, 4096, 12, 3]
 
             transformed_ray_directions_expanded = torch.unsqueeze(transformed_ray_directions, -2)
             transformed_ray_directions_expanded = transformed_ray_directions_expanded.expand(-1, -1, num_steps, -1)
@@ -115,15 +112,10 @@ class ImplicitGenerator3d(nn.Module):
             all_z_vals = z_vals
 
 
-        # Create images with NeRF
-        # print('all_outputs')
-        # print(all_outputs.shape)    [3, 4096, 24, 4]
         pixels, depth, weights = fancy_integration(all_outputs, all_z_vals, device=self.device, white_back=kwargs.get('white_back', False), last_back=kwargs.get('last_back', False), clamp_mode=kwargs['clamp_mode'], noise_std=kwargs['nerf_noise'])
 
         pixels = pixels.reshape((batch_size, img_size, img_size, 3))
         pixels = pixels.permute(0, 3, 1, 2).contiguous() * 2 - 1
-        # print('pixels')
-        # print(pixels.shape)    [3, 3, 64, 64]
 
         return pixels, torch.cat([pitch, yaw], -1)
 
@@ -255,13 +247,30 @@ class ImplicitGenerator3d(nn.Module):
 
 
     # Used for rendering interpolations
-    def staged_forward_with_frequencies(self, truncated_frequencies, truncated_phase_shifts, img_size, fov, ray_start, ray_end, num_steps, h_stddev, v_stddev, h_mean, v_mean, psi=0.7, lock_view_dependence=False, max_batch_size=50000, depth_map=False, near_clip=0, far_clip=2, sample_dist=None, hierarchical_sample=False, **kwargs):
+    def staged_forward_with_frequencies(self, truncated_frequencies, truncated_phase_shifts, img_pitch, img_yaw, img_size, fov, ray_start, ray_end, num_steps, h_stddev, v_stddev, h_mean, v_mean, psi=0.7, lock_view_dependence=False, max_batch_size=50000, depth_map=False, near_clip=0, far_clip=2, sample_dist=None, hierarchical_sample=False, mode='', **kwargs):
         batch_size = truncated_frequencies.shape[0]
+        if mode == '':
+            assert img_pitch == None and img_yaw == None, 'do one of normal forward or reconstruction'
+        elif mode == 'recon':
+            assert img_pitch != None and img_yaw != None, 'do one of normal forward or reconstruction'
+        else:
+            raise RuntimeError('generator forward collapse: using neither mode')
 
         with torch.no_grad():
             points_cam, z_vals, rays_d_cam = get_initial_rays_trig(batch_size, num_steps, resolution=(img_size, img_size), device=self.device, fov=fov, ray_start=ray_start, ray_end=ray_end) # batch_size, pixels, num_steps, 1
-            transformed_points, z_vals, transformed_ray_directions, transformed_ray_origins, pitch, yaw = transform_sampled_points(points_cam, z_vals, rays_d_cam, h_stddev=h_stddev, v_stddev=v_stddev, h_mean=h_mean, v_mean=v_mean, device=self.device, mode=sample_dist)
-
+            # transformed_points, z_vals, transformed_ray_directions, transformed_ray_origins, pitch, yaw = transform_sampled_points(points_cam, z_vals, rays_d_cam, h_stddev=h_stddev, v_stddev=v_stddev, h_mean=h_mean, v_mean=v_mean, device=self.device, mode=sample_dist)
+            if mode == '':
+                transformed_points, z_vals, transformed_ray_directions, transformed_ray_origins, pitch, yaw = transform_sampled_points(points_cam, z_vals, rays_d_cam,
+                                                                                                                                       h_stddev=h_stddev, v_stddev=v_stddev,
+                                                                                                                                       h_mean=h_mean, v_mean=v_mean,
+                                                                                                                                       device=self.device, mode=sample_dist)
+            elif mode == 'recon':
+                transformed_points, z_vals, transformed_ray_directions, transformed_ray_origins, pitch, yaw = transform_sampled_points(points_cam, z_vals, rays_d_cam,
+                                                                                                                                       h_stddev=0, v_stddev=0,
+                                                                                                                                       h_mean=img_yaw.unsqueeze(-1), v_mean=img_pitch.unsqueeze(-1),
+                                                                                                                                       device=self.device, mode='reconstruction')
+            else:
+                raise RuntimeError('staged_forward mode wrongly specified')
 
             transformed_ray_directions_expanded = torch.unsqueeze(transformed_ray_directions, -2)
             transformed_ray_directions_expanded = transformed_ray_directions_expanded.expand(-1, -1, num_steps, -1)
@@ -338,12 +347,30 @@ class ImplicitGenerator3d(nn.Module):
         return pixels, depth_map
 
 
-    def forward_with_frequencies(self, frequencies, phase_shifts, img_size, fov, ray_start, ray_end, num_steps, h_stddev, v_stddev, h_mean, v_mean, hierarchical_sample, sample_dist=None, lock_view_dependence=False, **kwargs):
+    def forward_with_frequencies(self, frequencies, phase_shifts, img_pitch, img_yaw, img_size, fov, ray_start, ray_end, num_steps, h_stddev, v_stddev, h_mean, v_mean, hierarchical_sample, sample_dist=None, lock_view_dependence=False, mode='', **kwargs):
         batch_size = frequencies.shape[0]
+        if mode == '':
+            assert img_pitch == None and img_yaw == None, 'do one of normal forward or reconstruction'
+        elif mode == 'recon':
+            assert img_pitch != None and img_yaw != None, 'do one of normal forward or reconstruction'
+        else:
+            raise RuntimeError('generator forward collapse: using neither mode')
+        # batch_size = z.shape[0]
 
         points_cam, z_vals, rays_d_cam = get_initial_rays_trig(batch_size, num_steps, resolution=(img_size, img_size), device=self.device, fov=fov, ray_start=ray_start, ray_end=ray_end) # batch_size, pixels, num_steps, 1
-        transformed_points, z_vals, transformed_ray_directions, transformed_ray_origins, pitch, yaw = transform_sampled_points(points_cam, z_vals, rays_d_cam, h_stddev=h_stddev, v_stddev=v_stddev, h_mean=h_mean, v_mean=v_mean, device=self.device, mode=sample_dist)
-
+        # transformed_points, z_vals, transformed_ray_directions, transformed_ray_origins, pitch, yaw = transform_sampled_points(points_cam, z_vals, rays_d_cam, h_stddev=h_stddev, v_stddev=v_stddev, h_mean=h_mean, v_mean=v_mean, device=self.device, mode=sample_dist)
+        if mode == '':
+            transformed_points, z_vals, transformed_ray_directions, transformed_ray_origins, pitch, yaw = transform_sampled_points(points_cam, z_vals, rays_d_cam,
+                                                                                                                                    h_stddev=h_stddev, v_stddev=v_stddev,
+                                                                                                                                    h_mean=h_mean, v_mean=v_mean,
+                                                                                                                                    device=self.device, mode=sample_dist)
+        elif mode == 'recon':
+            transformed_points, z_vals, transformed_ray_directions, transformed_ray_origins, pitch, yaw = transform_sampled_points(points_cam, z_vals, rays_d_cam,
+                                                                                                                                    h_stddev=0, v_stddev=0,
+                                                                                                                                    h_mean=img_yaw.unsqueeze(-1), v_mean=img_pitch.unsqueeze(-1),
+                                                                                                                                    device=self.device, mode='reconstruction')
+        else:
+            raise RuntimeError('forward mode wrongly specified')
 
         transformed_ray_directions_expanded = torch.unsqueeze(transformed_ray_directions, -2)
         transformed_ray_directions_expanded = transformed_ray_directions_expanded.expand(-1, -1, num_steps, -1)

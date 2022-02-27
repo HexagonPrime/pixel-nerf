@@ -153,7 +153,7 @@ class UniformBoxWarp(nn.Module):
     def __init__(self, sidelength):
         super().__init__()
         self.scale_factor = 2/sidelength
-
+        
     def forward(self, coordinates):
         return coordinates * self.scale_factor
 
@@ -167,7 +167,7 @@ class SPATIALSIRENBASELINE(nn.Module):
         self.z_dim = z_dim
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim
-
+        
         self.network = nn.ModuleList([
             FiLMLayer(3, hidden_dim),
             FiLMLayer(hidden_dim, hidden_dim),
@@ -179,43 +179,43 @@ class SPATIALSIRENBASELINE(nn.Module):
             FiLMLayer(hidden_dim, hidden_dim),
         ])
         self.final_layer = nn.Linear(hidden_dim, 1)
-
+        
         self.color_layer_sine = FiLMLayer(hidden_dim + 3, hidden_dim)
         self.color_layer_linear = nn.Sequential(nn.Linear(hidden_dim, 3))
-
+        
         self.mapping_network = CustomMappingNetwork(z_dim, 256, (len(self.network) + 1)*hidden_dim*2)
-
+        
         self.network.apply(frequency_init(25))
         self.final_layer.apply(frequency_init(25))
         self.color_layer_sine.apply(frequency_init(25))
         self.color_layer_linear.apply(frequency_init(25))
         self.network[0].apply(first_layer_film_sine_init)
-
+        
         self.gridwarper = UniformBoxWarp(0.24) # Don't worry about this, it was added to ensure compatibility with another model. Shouldn't affect performance.
 
     def forward(self, input, z, ray_directions, **kwargs):
         frequencies, phase_shifts = self.mapping_network(z)
         return self.forward_with_frequencies_phase_shifts(input, frequencies, phase_shifts, ray_directions, **kwargs)
-
+    
     def forward_with_frequencies_phase_shifts(self, input, frequencies, phase_shifts, ray_directions, **kwargs):
         frequencies = frequencies*15 + 30
-
+        
         input = self.gridwarper(input)
         x = input
-
+            
         for index, layer in enumerate(self.network):
             start = index * self.hidden_dim
             end = (index+1) * self.hidden_dim
             x = layer(x, frequencies[..., start:end], phase_shifts[..., start:end])
-
+        
         sigma = self.final_layer(x)
         rbg = self.color_layer_sine(torch.cat([ray_directions, x], dim=-1), frequencies[..., -self.hidden_dim:], phase_shifts[..., -self.hidden_dim:])
         rbg = torch.sigmoid(self.color_layer_linear(rbg))
-
+        
         return torch.cat([rbg, sigma], dim=-1)
-
-
-
+    
+    
+    
 class UniformBoxWarp(nn.Module):
     def __init__(self, sidelength):
         super().__init__()
@@ -234,7 +234,7 @@ def sample_from_3dgrid(coordinates, grid):
     """
     coordinates = coordinates.float()
     grid = grid.float()
-
+    
     batch_size, n_coords, n_dims = coordinates.shape
     sampled_features = torch.nn.functional.grid_sample(grid.expand(batch_size, -1, -1, -1, -1),
                                                        coordinates.reshape(batch_size, 1, 1, -1, n_dims),
@@ -254,7 +254,7 @@ def modified_first_sine_init(m):
 
 class EmbeddingPiGAN128(nn.Module):
     """Smaller architecture that has an additional cube of embeddings. Often gives better fine details."""
-
+    
     def __init__(self, input_dim=2, z_dim=100, hidden_dim=128, output_dim=1, device=None):
         super().__init__()
         self.device = device
@@ -289,7 +289,7 @@ class EmbeddingPiGAN128(nn.Module):
         self.network[0].apply(modified_first_sine_init)
 
         self.spatial_embeddings = nn.Parameter(torch.randn(1, 32, 96, 96, 96)*0.01)
-
+        
         # !! Important !! Set this value to the expected side-length of your scene. e.g. for for faces, heads usually fit in
         # a box of side-length 0.24, since the camera has such a narrow FOV. For other scenes, with higher FOV, probably needs to be bigger.
         self.gridwarper = UniformBoxWarp(0.24)
@@ -316,8 +316,8 @@ class EmbeddingPiGAN128(nn.Module):
 
         return torch.cat([rbg, sigma], dim=-1)
 
-
-
+    
+    
 class EmbeddingPiGAN256(EmbeddingPiGAN128):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs, hidden_dim=256)

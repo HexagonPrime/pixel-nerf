@@ -72,7 +72,6 @@ def get_initial_rays_trig(n, num_steps, device, fov, resolution, ray_start, ray_
 
     z_vals = torch.linspace(ray_start, ray_end, num_steps, device=device).reshape(1, num_steps, 1).repeat(W*H, 1, 1)
     points = rays_d_cam.unsqueeze(1).repeat(1, num_steps, 1) * z_vals
-    # print (points)
 
     points = torch.stack(n*[points])
     z_vals = torch.stack(n*[z_vals])
@@ -159,6 +158,7 @@ def sample_camera_positions(device, n=1, r=1, horizontal_stddev=1, vertical_stdd
         v = ((torch.rand((n,1), device=device) - .5) * 2 * v_stddev + v_mean)
         v = torch.clamp(v, 1e-5, 1 - 1e-5)
         phi = torch.arccos(1 - 2 * v)
+
     else:
         # Just use the mean.
         theta = torch.ones((n, 1), device=device, dtype=torch.float) * horizontal_mean
@@ -173,7 +173,7 @@ def sample_camera_positions(device, n=1, r=1, horizontal_stddev=1, vertical_stdd
 
     return output_points, phi, theta
 
-def create_cam2world_matrix(forward_vector, origin, device=None, extrinsics=None):
+def create_cam2world_matrix(forward_vector, origin, device=None):
     """Takes in the direction the camera is pointing and the camera origin and returns a cam2world matrix."""
 
     forward_vector = normalize_vecs(forward_vector)

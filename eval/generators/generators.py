@@ -302,9 +302,9 @@ class ImplicitGenerator3d(nn.Module):
         if lock_view_dependence:
             transformed_ray_directions_expanded = torch.zeros_like(transformed_ray_directions_expanded)
             transformed_ray_directions_expanded[..., -1] = -1
-
+            
         coarse_output = self.siren.forward_with_frequencies_phase_shifts(transformed_points, frequencies, phase_shifts, ray_directions=transformed_ray_directions_expanded).reshape(batch_size, img_size * img_size, num_steps, 4)
-
+        
         if hierarchical_sample:
             with torch.no_grad():
                 transformed_points = transformed_points.reshape(batch_size, img_size * img_size, num_steps, 3)
@@ -324,7 +324,7 @@ class ImplicitGenerator3d(nn.Module):
                 fine_points = transformed_ray_origins.unsqueeze(2).contiguous() + transformed_ray_directions.unsqueeze(2).contiguous() * fine_z_vals.expand(-1,-1,-1,3).contiguous() # dimensions here not matching
                 fine_points = fine_points.reshape(batch_size, img_size*img_size*num_steps, 3)
                 #### end new importance sampling
-
+                
                 if lock_view_dependence:
                     transformed_ray_directions_expanded = torch.zeros_like(transformed_ray_directions_expanded)
                     transformed_ray_directions_expanded[..., -1] = -1
